@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from aiogram import F, Router, types
 from aiogram.filters.command import Command
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from ..aki import Akinator, CantGoBackAnyFurther
 
@@ -11,6 +12,7 @@ AKINATOR_GAMES = {}
 
 router = Router()
 
+# команда в группе
 @router.message(Command('aki'))
 async def akicmd(message, command):
     msg = await message.reply('⏳')
@@ -19,8 +21,7 @@ async def akicmd(message, command):
     await aki.start_game(language=command.args if command.args else 'ru', child_mode=True)
     AKINATOR_GAMES[game_id] = {
         'player': message.from_user.id,
-        'game': aki,
-        'inline': False
+        'game': aki
     }
     rich_blocks = [
         types.InputRichBlockParagraph(
@@ -83,12 +84,109 @@ async def akicmd(message, command):
         )
     )
 
+# инлайн
+@router.inline_query()
+async def akiinline(query):
+    builder = InlineKeyboardBuilder()
+    builder.add(types.InlineKeyboardButton(
+        text='⏳',
+        callback_data='wait'
+    ))
+    await query.answer(
+        results=[types.InlineQueryResultArticle(
+            id='aki/new',
+            title=f'🔮 акинатор',
+            description='начать новую игру',
+            input_message_content=types.InputTextMessageContent(
+                message_text='🔮 подождите...'
+            ),
+            reply_markup=builder.as_markup()
+        )]
+    )
+
+@router.chosen_inline_result(F.result_id == 'aki/new')
+async def akichoosen(result):
+    game_id = secrets.token_hex(16)
+    aki = Akinator()
+    await aki.start_game(language='ru', child_mode=True)
+    AKINATOR_GAMES[game_id] = {
+        'player': result.from_user.id,
+        'game': aki
+    }
+    rich_blocks = [
+        types.InputRichBlockParagraph(
+            text=[
+                types.RichTextBold(
+                    text=f'{aki.step}. '
+                ),
+                aki.question
+            ]
+        ),
+        types.InputRichBlockFooter(
+            text=f'прогресс: {aki.progression}%'
+        ),
+        types.InputRichBlockButtons(
+            buttons=[
+                types.RichMessageButton(
+                    text='да',
+                    callback_data=f'aki/{game_id}/y',
+                    style='success'
+                ),
+                types.RichMessageButton(
+                    text='нет',
+                    callback_data=f'aki/{game_id}/n',
+                    style='danger'
+                )
+            ]
+        ),
+        types.InputRichBlockButtons(
+            buttons=[
+                types.RichMessageButton(
+                    text='не знаю',
+                    callback_data=f'aki/{game_id}/idk'
+                )
+            ]
+        ),
+        types.InputRichBlockButtons(
+            buttons=[
+                types.RichMessageButton(
+                    text='возможно',
+                    callback_data=f'aki/{game_id}/p'
+                ),
+                types.RichMessageButton(
+                    text='скорее нет',
+                    callback_data=f'aki/{game_id}/pn'
+                )
+            ]
+        ),
+        types.InputRichBlockButtons(
+            buttons=[
+                types.RichMessageButton(
+                    text='назад',
+                    callback_data=f'aki/{game_id}/back'
+                )
+            ]
+        )
+    ]
+    await result.bot.edit_message_text(
+        inline_message_id=result.inline_message_id,
+        rich_message=types.InputRichMessage(
+            blocks=rich_blocks
+        )
+    )
+
+# обработка нажатий
 @router.callback_query(F.data.startswith('aki/'))
 async def akibutton(call):
-    _ = {
-        'chat_id': call.message.chat.id,
-        'message_id': call.message.message_id
-    }
+    if call.inline_message_id:
+        _ = {
+            'inline_message_id': call.inline_message_id
+        }
+    else:
+        _ = {
+            'chat_id': call.message.chat.id,
+            'message_id': call.message.message_id
+        }
     data = call.data.split('/')
     game_id = data[1]
     game = AKINATOR_GAMES.get(game_id)
@@ -108,6 +206,9 @@ async def akibutton(call):
         await aki.answer(data[2])
     await call.answer()
     if aki.win:
+        # в инлайновых РИЧ-мессаджах почему-то нельзя загружать новые фотки по УРЛ... поэтому делаем так!
+        if call.inline_message_id:
+            await (await call.bot.send_photo(chat_id=-1003776214752, photo=aki.photo)).delete()
         if aki.finished:
             timestamp = int(datetime.strptime(aki.last_played, '%d/%m/%Y - %HH%M').replace(tzinfo=ZoneInfo('Europe/Paris')).timestamp())
             rich_blocks = [
