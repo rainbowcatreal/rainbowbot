@@ -1,3 +1,4 @@
+import json
 import secrets
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -11,6 +12,25 @@ from ..aki import Akinator, CantGoBackAnyFurther
 AKINATOR_GAMES = {}
 
 router = Router()
+
+# функции чтения и сохранения URL → file_id
+def utfi_read():
+    with open('data/url_to_file_id.json', 'r') as f:
+        data = json.load(f)
+    return data
+
+def utfi_write(data):
+    with open('data/url_to_file_id.json', 'w') as f:
+        json.dump(data, f)
+
+def utfi_add(url, file_id):
+    data = utfi_read()
+    data[url] = file_id
+    utfi_write(data)
+    return data
+
+# хранение URL → FILE_ID
+UTFI = utfi_read()
 
 # команда в группе
 @router.message(Command('aki'))
@@ -85,7 +105,7 @@ async def akicmd(message, command):
     )
 
 # инлайн
-@router.inline_query()
+@router.inline_query(F.query.startswith('aki'))
 async def akiinline(query):
     builder = InlineKeyboardBuilder()
     builder.add(types.InlineKeyboardButton(
@@ -93,22 +113,36 @@ async def akiinline(query):
         callback_data='wait'
     ))
     await query.answer(
-        results=[types.InlineQueryResultArticle(
-            id='aki/new',
-            title=f'🔮 акинатор',
-            description='начать новую игру',
-            input_message_content=types.InputTextMessageContent(
-                message_text='🔮 подождите...'
+        results=[
+            types.InlineQueryResultArticle(
+                id='aki/new/ru',
+                title=f'🔮 акинатор 🇷🇺',
+                description='начать новую игру на русском',
+                input_message_content=types.InputTextMessageContent(
+                    message_text='🔮 подождите...'
+                ),
+                reply_markup=builder.as_markup()
             ),
-            reply_markup=builder.as_markup()
-        )]
+            types.InlineQueryResultArticle(
+                id='aki/new/en',
+                title=f'🔮 акинатор 🇺🇲',
+                description='начать новую игру на английском',
+                input_message_content=types.InputTextMessageContent(
+                    message_text='🔮 подождите...'
+                ),
+                reply_markup=builder.as_markup()
+            )
+        ],
+        cache_time=0,
+        is_personal=True
     )
 
-@router.chosen_inline_result(F.result_id == 'aki/new')
+@router.chosen_inline_result(F.result_id.startswith('aki/new/'))
 async def akichoosen(result):
     game_id = secrets.token_hex(16)
+    language = result.result_id.split('/')[2]
     aki = Akinator()
-    await aki.start_game(language='ru', child_mode=True)
+    await aki.start_game(language=language, child_mode=True)
     AKINATOR_GAMES[game_id] = {
         'player': result.from_user.id,
         'game': aki
@@ -178,6 +212,7 @@ async def akichoosen(result):
 # обработка нажатий
 @router.callback_query(F.data.startswith('aki/'))
 async def akibutton(call):
+    global UTFI
     if call.inline_message_id:
         _ = {
             'inline_message_id': call.inline_message_id
@@ -206,15 +241,22 @@ async def akibutton(call):
         await aki.answer(data[2])
     await call.answer()
     if aki.win:
-        # в инлайновых РИЧ-мессаджах почему-то нельзя загружать новые фотки по УРЛ... поэтому делаем так!
-        if call.inline_message_id:
-            await (await call.bot.send_photo(chat_id=-1003776214752, photo=aki.photo)).delete()
+        url = aki.photo
+        file_id = UTFI.get(url)
+        if not file_id:
+            msg_image = await call.bot.send_photo(
+                chat_id=-1003776214752,
+                caption='#UTFI',
+                photo=url
+            )
+            file_id = msg_image.photo[-1].file_id
+            UTFI = utfi_add(url, file_id)
         if aki.finished:
             timestamp = int(datetime.strptime(aki.last_played, '%d/%m/%Y - %HH%M').replace(tzinfo=ZoneInfo('Europe/Paris')).timestamp())
             rich_blocks = [
                 types.InputRichBlockPhoto(
                     photo=types.InputMediaPhoto(
-                        media=aki.photo
+                        media=file_id
                     )
                 ),
                 types.InputRichBlockParagraph(

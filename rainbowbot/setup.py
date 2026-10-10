@@ -16,6 +16,8 @@ class BeautifulFormatter(logging.Formatter):
         date = datetime.fromtimestamp(record.created)
         time = f'{date.hour:02}:{date.minute:02}:{date.second:02}'
         log = f'\x1b[30;1m{time}\x1b[0m {level} {message}'
+        if record.exc_info:
+            log += f'\n\x1b[31m{self.formatException(record.exc_info)}\x1b[0m'
         return log
 
 handler = logging.StreamHandler()
