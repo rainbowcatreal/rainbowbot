@@ -139,7 +139,7 @@ async def rpsgame(query):
             types.InputRichBlockParagraph(
                 text='😡 не твоя игра'
             ),
-            types.RichMessageButtons(
+            types.InputRichBlockButtons(
                 buttons=[
                     types.RichMessageButton(
                         text='➡️ создать свою ⬅️',
