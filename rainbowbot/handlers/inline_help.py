@@ -27,6 +27,21 @@ async def helpinline(query):
                                         ),
                                         ' — джинн, читающий ваши мысли'
                                     ]
+                                ),
+                            ]
+                        ),
+                        types.InputRichBlockListItem(
+                            blocks=[
+                                types.InputRichBlockParagraph(
+                                    text=[
+                                        types.RichTextButton(
+                                            button=types.RichMessageButton(
+                                                text='🪨✂️📄 камень-ножницы-бумага',
+                                                switch_inline_query_current_chat='rps'
+                                            )
+                                        ),
+                                        ' — с нюансом... (используется ии)'
+                                    ]
                                 )
                             ]
                         )
