@@ -288,7 +288,6 @@ async def rpsresult(result):
         return
     la = game['history'][-1]
     user_query = query_data[2]
-    #yaubyutebyazatochtoslilchayketosoobscheniekotoroeyaperedumalotpravlyatiudalil
     response = await ai.chat.completions.create(
         model=AI_MODEL,
         messages=[
