@@ -242,23 +242,23 @@ async def akibutton(call):
     await call.answer()
     if aki.win:
         url = aki.photo
-        file_id = UTFI.get(url)
-        if not file_id:
-            msg_image = await call.bot.send_photo(
-                chat_id=-1003776214752,
-                caption='#UTFI',
-                photo=url
-            )
-            file_id = msg_image.photo[-1].file_id
-            UTFI = utfi_add(url, file_id)
+        no_image = False
+        try:
+            file_id = UTFI.get(url)
+            if not file_id:
+                msg_image = await call.bot.send_photo(
+                    chat_id=-1003776214752,
+                    caption='#UTFI',
+                    photo=url
+                )
+                file_id = msg_image.photo[-1].file_id
+                UTFI = utfi_add(url, file_id)
+        except Exception:
+            logging.exception(f'failed to send an image ({url})')
+            no_image = True
         if aki.finished:
             timestamp = int(datetime.strptime(aki.last_played, '%d/%m/%Y - %HH%M').replace(tzinfo=ZoneInfo('Europe/Paris')).timestamp())
             rich_blocks = [
-                types.InputRichBlockPhoto(
-                    photo=types.InputMediaPhoto(
-                        media=file_id
-                    )
-                ),
                 types.InputRichBlockParagraph(
                     text=types.RichTextBold(
                         text=f'ура 🎉 я угадал вашего персонажа {aki.name_proposition}!'
@@ -282,11 +282,6 @@ async def akibutton(call):
             ]
         else:
             rich_blocks = [
-                types.InputRichBlockPhoto(
-                    photo=types.InputMediaPhoto(
-                        media=aki.photo
-                    )
-                ),
                 types.InputRichBlockParagraph(
                     text=types.RichTextBold(
                         text=f'вы загадали {aki.name_proposition}?'
@@ -311,6 +306,14 @@ async def akibutton(call):
                     ]
                 )
             ]
+        if not no_image:
+            rich_blocks.insert(0,
+                types.InputRichBlockPhoto(
+                    photo=types.InputMediaPhoto(
+                        media=aki.photo
+                    )
+                )
+            )
     else:
         if aki.finished:
             rich_blocks = [
